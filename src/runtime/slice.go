@@ -13,9 +13,9 @@ import (
 )
 
 type slice struct {
-	array unsafe.Pointer
-	len   int
-	cap   int
+	array unsafe.Pointer //指向底层数组的指针
+	len   int            //长度
+	cap   int            //容量
 }
 
 // A notInHeapSlice is a slice backed by runtime/internal/sys.NotInHeap memory.
@@ -99,20 +99,17 @@ func makeslicecopy(et *_type, tolen int, fromlen int, from unsafe.Pointer) unsaf
 //
 //go:linkname makeslice
 func makeslice(et *_type, len, cap int) unsafe.Pointer {
+	//根据类型计算所需内存 判断是否存在溢出情况
 	mem, overflow := math.MulUintptr(et.Size_, uintptr(cap))
+	//如果存在溢出/所需内存超过最大可分配内存/异常情况：长度小于0、长度大于容量
 	if overflow || mem > maxAlloc || len < 0 || len > cap {
-		// NOTE: Produce a 'len out of range' error instead of a
-		// 'cap out of range' error when someone does make([]T, bignumber).
-		// 'cap out of range' is true too, but since the cap is only being
-		// supplied implicitly, saying len is clearer.
-		// See golang.org/issue/4085.
 		mem, overflow := math.MulUintptr(et.Size_, uintptr(len))
 		if overflow || mem > maxAlloc || len < 0 {
 			panicmakeslicelen()
 		}
 		panicmakeslicecap()
 	}
-
+	//调用mallocgc分配内存
 	return mallocgc(mem, et, true)
 }
 
@@ -175,6 +172,13 @@ func makeslice64(et *_type, len64, cap64 int64) unsafe.Pointer {
 //
 //go:linkname growslice
 func growslice(oldPtr unsafe.Pointer, newLen, oldCap, num int, et *_type) slice {
+	//oldPtr 指向原切片底层数组的指针
+	//newLen 添加元素后的长度
+	//oldCap 旧切片的容量
+	//num 新添加的元素个数
+	//et 元素类型
+
+	//旧长度
 	oldLen := newLen - num
 	if raceenabled {
 		callerpc := getcallerpc()
@@ -187,6 +191,7 @@ func growslice(oldPtr unsafe.Pointer, newLen, oldCap, num int, et *_type) slice 
 		asanread(oldPtr, uintptr(oldLen*int(et.Size_)))
 	}
 
+	//异常情况
 	if newLen < 0 {
 		panic(errorString("growslice: len out of range"))
 	}
@@ -197,6 +202,7 @@ func growslice(oldPtr unsafe.Pointer, newLen, oldCap, num int, et *_type) slice 
 		return slice{unsafe.Pointer(&zerobase), newLen, newLen}
 	}
 
+	//确认扩容后的容量
 	newcap := nextslicecap(newLen, oldCap)
 
 	var overflow bool
@@ -285,22 +291,29 @@ func growslice(oldPtr unsafe.Pointer, newLen, oldCap, num int, et *_type) slice 
 	return slice{p, newLen, newcap}
 }
 
-// nextslicecap computes the next appropriate slice length.
+// nextslicecap 扩容规则
 func nextslicecap(newLen, oldCap int) int {
+
 	newcap := oldCap
 	doublecap := newcap + newcap
+	//如果两倍旧容量都不够新的长度（原长度+新添加的元素个数） 那新的容量就直接为新的长度
 	if newLen > doublecap {
 		return newLen
 	}
 
+	//双倍扩容的阈值 256
 	const threshold = 256
+	//如果扩容之前的容量小于256：比较小 直接双倍扩容
 	if oldCap < threshold {
 		return doublecap
 	}
+	//否则进入更复杂的扩容逻辑
 	for {
 		// Transition from growing 2x for small slices
 		// to growing 1.25x for large slices. This formula
 		// gives a smooth-ish transition between the two.
+
+		//一个平滑的从双倍扩容到1.25倍扩容的过程
 		newcap += (newcap + 3*threshold) >> 2
 
 		// We need to check `newcap >= newLen` and whether `newcap` overflowed.
