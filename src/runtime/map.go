@@ -107,19 +107,17 @@ func isEmpty(x uint8) bool {
 
 // A header for a Go map.
 type hmap struct {
-	// Note: the format of the hmap is also encoded in cmd/compile/internal/reflectdata/reflect.go.
-	// Make sure this stays in sync with the compiler's definition.
-	count     int // # live cells == size of map.  Must be first (used by len() builtin)
+	count     int // # len() 返回的值
 	flags     uint8
-	B         uint8  // log_2 of # of buckets (can hold up to loadFactor * 2^B items)
+	B         uint8  // 桶数组长度为 2^B
 	noverflow uint16 // approximate number of overflow buckets; see incrnoverflow for details
-	hash0     uint32 // hash seed
+	hash0     uint32 // 哈希种子
 
-	buckets    unsafe.Pointer // array of 2^B Buckets. may be nil if count==0.
-	oldbuckets unsafe.Pointer // previous bucket array of half the size, non-nil only when growing
+	buckets    unsafe.Pointer // 桶数组
+	oldbuckets unsafe.Pointer // 渐进式扩容时可能新旧桶同时存在
 	nevacuate  uintptr        // progress counter for evacuation (buckets less than this have been evacuated)
 
-	extra *mapextra // optional fields
+	extra *mapextra // 溢出桶数组
 }
 
 // mapextra holds fields that are not present on all maps.
